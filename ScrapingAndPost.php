@@ -10,6 +10,7 @@ Author: Vasyl Kostyniuk
 register_activation_hook(__FILE__, 'scraping_plugin_activation');
 add_action('scraping_hook', 'scraping_and_post');
 
+
 function scraping_plugin_activation() {
 
     // Schedule the event to run every hour
@@ -85,13 +86,12 @@ function scraping_and_post() {
                 $formattedDate = $birthday->format('Y-m-d');
                 // Prepare data for insertion
                 $data = array(
-                    'firstname' => $rowData[0], // Replace with your actual column names
-                    'lastname' => $rowData[1],
+                    'firstname' => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $rowData[0]), // Replace with your actual column names
+                    'lastname' => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $rowData[1]),
                     'birthday' => $formattedDate,
-                    'subject_group' => $rowData[3],
+                    'subject_group' => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $rowData[3]),
                 );
-                
-                
+
                 // Check if data with the same values already exists
                 $existingData = $wpdb->get_row(
                     $wpdb->prepare(
@@ -191,11 +191,11 @@ function scraping_and_post() {
                         $birthday = DateTime::createFromFormat('d-m-Y', $rowData[2]);
                         $formattedDate = $birthday->format('Y-m-d');
                         // Prepare data for insertion
-                        $data = array(
-                            'firstname' => $rowData[0], // Replace with your actual column names
-                            'lastname' => $rowData[1],
+                         $data = array(
+                            'firstname' => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $rowData[0]), // Replace with your actual column names
+                            'lastname' => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $rowData[1]),
                             'birthday' => $formattedDate,
-                            'subject_group' => $rowData[3],
+                            'subject_group' => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $rowData[3]),
                         );
                         // Check if data with the same values already exists
                         $existingData = $wpdb->get_row(
