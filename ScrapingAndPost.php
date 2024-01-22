@@ -10,33 +10,19 @@ Author: Vasyl Kostyniuk
 register_activation_hook(__FILE__, 'scraping_plugin_activation');
 add_action('scraping_hook', 'scraping_and_post');
 
-function add_custom_interval($schedules) {
-    $schedules['15min'] = array(
-        'interval' => 60*15,
-        'display' => __( 'Every 15 minutes' )
-    );
-    return $schedules;
-}
-
 function scraping_plugin_activation() {
-    add_filter( 'cron_schedules', 'add_custom_interval');
 
-    // Schedule the event to run every 10 minutes
+    // Schedule the event to run every hour
     if (!wp_next_scheduled('scraping_hook')) {
-        wp_schedule_event(time(), '15min', 'scraping_hook');
+        wp_schedule_event(time(), 'hourly', 'scraping_hook');
     }
  }
-add_action('rest_api_init', function () {
-    register_rest_route('blockonomics', '/webhook/', array(
-        'methods' => 'GET',
-        'callback' => 'scraping_and_post',
-    ));
-});
+
 function scraping_and_post() {
+
     $currentDate = date('dmY');
     $api_url = 'https://autregweb.sst.dk/AuthorizationSearchResult.aspx?authmin='.$currentDate.'&authmax='.$currentDate;
 
-    $post_api_url = 'https://www.medicinskenyheder.dk/wp-json/wp/v2/posts';
     $response = wp_remote_get($api_url);
     global $wpdb;
     
@@ -46,6 +32,7 @@ function scraping_and_post() {
 
         $body = wp_remote_retrieve_body($response);
         $dom = new DOMDocument;
+        $dom->encoding = 'UTF-8';
         // Load the HTML content into the DOMDocument
         $dom->loadHTML($body);
 
@@ -85,6 +72,13 @@ function scraping_and_post() {
                 foreach ($xpath->query('.//td', $row) as $cell) {
                     // Save the cell data to the $rowData array
                     $rowData[] = trim($cell->nodeValue);
+                    
+                    // Check if the cell contains an anchor (<a>) tag
+                    $anchor = $xpath->query('.//a', $cell)->item(0);
+                    if ($anchor) {
+                        // Get the href value from the anchor tag
+                        $hrefValue = $anchor->getAttribute('href');
+                    }
                 }
                 
                 $birthday = DateTime::createFromFormat('d-m-Y', $rowData[2]);
@@ -96,6 +90,8 @@ function scraping_and_post() {
                     'birthday' => $formattedDate,
                     'subject_group' => $rowData[3],
                 );
+                
+                
                 // Check if data with the same values already exists
                 $existingData = $wpdb->get_row(
                     $wpdb->prepare(
@@ -113,20 +109,45 @@ function scraping_and_post() {
     
                     //post this data
                     $post_data = array(
-                        'post_title' => 'New Professional',
-                        'post_content' => $data['firstname'] . ' ' . $data['lastname'] . "\n" . $data['birthday'] . "\n" . $data['subject_group'],
+                        'post_title' => 'New '.$data['subject_group'],
+                        'post_content' => "Full Name: " . $data['firstname'] . ' ' . $data['lastname'] . "\nBirthday: " . $data['birthday'] . "\nProfessional Group: " . $data['subject_group'],
                         'post_status' => 'publish', 
                         'post_author' => 1,
-                        'post_type' => 'post'
+                        'post_type' => 'post',
+                        'post_category' => array(6)
                     );
+
                     
-                    echo $post_data['post_content'];
+                    $sub_response = wp_remote_get($hrefValue);
+                    
+                    if (!is_wp_error($sub_response)) {
+                
+                        $sub_body = wp_remote_retrieve_body($sub_response);
+
+                        $sub_dom = new DOMDocument;
+                        $sub_dom->encoding = 'UTF-8';
+                        // Load the HTML content into the DOMDocument
+                        $sub_dom->loadHTML($sub_body);
+                
+                        // Create a new DOMXPath instance
+                        $sub_xpath = new DOMXPath($sub_dom);
+                        
+                        //Get Specialty
+                        $specialityNode = $sub_xpath->evaluate('//span[@id="SpecialitiesRepeater_Speciality_0"]')->item(0);
+
+                        if($specialityNode) {
+                            $specialityValue = $specialityNode -> textContent;
+                            $post_data['post_content'] .= "\nSpecialty: " . $specialityValue;
+                        }
+                        
+                        
+                    }
                     wp_insert_post( $post_data );
                 }
             }
         } else {
             // No div found with class ClientSearchResults
-            echo "No div found with class ClientSearchResults.";
+            echo "No table found.";
         }
         
         //get data from another pages
@@ -195,13 +216,39 @@ function scraping_and_post() {
             
                             //post this data
                             $post_data = array(
-                                'post_title' => 'New Professional',
-                                'post_content' => $data['firstname'] . ' ' . $data['lastname'] . "\n" . $data['birthday'] . "\n" . $data['subject_group'],
+                                'post_title' => 'New '.$data['subject_group'],
+                                'post_content' => "Full Name: " . $data['firstname'] . ' ' . $data['lastname'] . "\nBirthday: " . $data['birthday'] . "\nProfessional Group: " . $data['subject_group'],
                                 'post_status' => 'publish', 
                                 'post_author' => 1,
-                                'post_type' => 'post'
+                                'post_type' => 'post',
+                                'post_category' => array(6)
                             );
-
+                            
+                            $sub_response = wp_remote_get($hrefValue);
+                    
+                            if (!is_wp_error($sub_response)) {
+                        
+                                $sub_body = wp_remote_retrieve_body($sub_response);
+        
+                                $sub_dom = new DOMDocument;
+                                $sub_dom->encoding = 'UTF-8';
+                                // Load the HTML content into the DOMDocument
+                                $sub_dom->loadHTML($sub_body);
+                        
+                                // Create a new DOMXPath instance
+                                $sub_xpath = new DOMXPath($sub_dom);
+                                
+                                //Get Specialty
+                                $specialityNode = $sub_xpath->evaluate('//span[@id="SpecialitiesRepeater_Speciality_0"]')->item(0);
+        
+                                if($specialityNode) {
+                                    $specialityValue = $specialityNode -> textContent;
+                                    $post_data['post_content'] .= "\nSpecialty: " . $specialityValue;
+                                }
+                                
+                                
+                            }
+                            
                             $post_id = wp_insert_post($post_data);
 
                             if (is_wp_error($post_id)) {
@@ -212,8 +259,8 @@ function scraping_and_post() {
                         }
                     }
                 } else {
-                    // No div found with class ClientSearchResults
-                    echo "No div found with class ClientSearchResults.";
+                    
+                    echo "No table found.";
                 }
             }
        }
@@ -225,7 +272,6 @@ register_deactivation_hook(__FILE__, 'scraping_plugin_deactivation');
 function scraping_plugin_deactivation() {
     // Clear the scheduled event and remove the custom interval on deactivation
     wp_clear_scheduled_hook('scraping_hook');
-    remove_filter('cron_schedules', 'add_custom_interval');
 }
 
 
